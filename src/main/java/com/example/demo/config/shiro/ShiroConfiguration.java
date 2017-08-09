@@ -1,14 +1,18 @@
 package com.example.demo.config.shiro;
 
+import at.pollux.thymeleaf.shiro.dialect.ShiroDialect;
 import org.apache.shiro.mgt.SecurityManager;
+import org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor;
 import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
 import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.handler.SimpleMappingExceptionResolver;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Created by BFD-593 on 2017/8/8.
@@ -31,7 +35,6 @@ public class ShiroConfiguration {
 
         shiroFilterFactoryBean.setLoginUrl("/login");//登录url
         shiroFilterFactoryBean.setSuccessUrl("/index");//登录成功后跳转的页面
-//        shiroFilterFactoryBean.setUnauthorizedUrl("/403"); //这里设置403并不会起作用，参考http://www.jianshu.com/p/e03f5b54838c
 
         shiroFilterFactoryBean.setFilterChainDefinitionMap(filterChainDefinitionMap);
         return shiroFilterFactoryBean;
@@ -73,4 +76,40 @@ public class ShiroConfiguration {
         return new CredentialsMatcher();
     }
 
+    /**
+     * 权限认证
+     * 需要开启Shiro AOP注解支持
+     * @RequiresPermissions({"userinfo:view"})
+     * @RequiresRoles({"wangjing"})等注解的支持
+     * @param securityManager
+     * @return
+     */
+    @Bean
+    public AuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor(SecurityManager securityManager){
+        AuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor = new AuthorizationAttributeSourceAdvisor();
+        authorizationAttributeSourceAdvisor.setSecurityManager(securityManager);
+        return authorizationAttributeSourceAdvisor;
+    }
+
+    /**
+     * 当用户无权限访问403页面而不抛异常，默认shiro会报UnauthorizedException异常
+     * @return
+     */
+    @Bean
+    public SimpleMappingExceptionResolver resolver() {
+        SimpleMappingExceptionResolver resolver = new SimpleMappingExceptionResolver();
+        Properties properties = new Properties();
+        properties.setProperty("org.apache.shiro.authz.UnauthorizedException", "/403");
+        resolver.setExceptionMappings(properties);
+        return resolver;
+    }
+
+    /**
+     * 整合thymeleaf中可以使用shiro标签
+     * @return
+     */
+    @Bean
+    public ShiroDialect shiroDialect() {
+        return new ShiroDialect();
+    }
 }
