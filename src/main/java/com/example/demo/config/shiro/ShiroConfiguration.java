@@ -1,6 +1,7 @@
 package com.example.demo.config.shiro;
 
 import at.pollux.thymeleaf.shiro.dialect.ShiroDialect;
+import com.example.demo.filter.KaptchaFilter;
 import org.apache.shiro.cache.ehcache.EhCacheManager;
 import org.apache.shiro.codec.Base64;
 import org.apache.shiro.mgt.SecurityManager;
@@ -14,32 +15,42 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.handler.SimpleMappingExceptionResolver;
 
+import javax.servlet.Filter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
 /**
+ * shiro配置类
  * Created by BFD-593 on 2017/8/8.
  */
 @Configuration
 public class ShiroConfiguration {
     @Bean(name="shiroFilter")
     public ShiroFilterFactoryBean shiroFilterFactoryBean(@Qualifier("securityManager") SecurityManager manager) {
-
+        //设置shiro安全管理框架
         ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
         shiroFilterFactoryBean.setSecurityManager(manager);
+        //将我们自己的拦截器注入到shiro中
+        Map<String, Filter> filterMap = shiroFilterFactoryBean.getFilters();//先获取shiro内部拦截器
+        KaptchaFilter kaptchaFilter = new KaptchaFilter();//初始化自己的拦截器
+        filterMap.put("kaptchaFilter", kaptchaFilter);//加入我们的拦截器
+        shiroFilterFactoryBean.setFilters(filterMap);//注入
 
-        Map<String, String> filterChainDefinitionMap = new LinkedHashMap<>();
         //配置记住我或认证通过可以访问的地址
+        Map<String, String> filterChainDefinitionMap = new LinkedHashMap<>();
         filterChainDefinitionMap.put("/", "user");
         filterChainDefinitionMap.put("/index", "user");
-
         /** authc：该过滤器下的页面必须验证后才能访问，它是Shiro内置的一个拦截器
          * org.apache.shiro.web.filter.authc.FormAuthenticationFilter */
         // anon：它对应的过滤器里面是空的,什么都没做,可以理解为不拦截
         filterChainDefinitionMap.put("/logout", "logout");
         filterChainDefinitionMap.put("/favicon.ico", "anon");
         filterChainDefinitionMap.put("/static/**", "anon");
+
+        filterChainDefinitionMap.put("/login", "kaptchaFilter");//设置登录时使用kaptchaFilter我们自己的拦截器
+        filterChainDefinitionMap.put("/kaptcha.jpg", "anon");//图片验证码(kaptcha框架,会访问localhost:8080/kaptcha.jpg来自动生成验证码)
+
         filterChainDefinitionMap.put("/**", "authc");
         //authc表示需要验证身份才能访问，还有一些比如anon表示不需要验证身份就能访问等。
         //关于为什么设置filterChainDefinitionMap.put("/favicon.ico", "anon");，请参考Shiro登录后下载favicon.ico问题
