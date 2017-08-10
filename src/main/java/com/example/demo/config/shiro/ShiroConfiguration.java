@@ -1,10 +1,14 @@
 package com.example.demo.config.shiro;
 
 import at.pollux.thymeleaf.shiro.dialect.ShiroDialect;
+import org.apache.shiro.cache.ehcache.EhCacheManager;
+import org.apache.shiro.codec.Base64;
 import org.apache.shiro.mgt.SecurityManager;
 import org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor;
 import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.CookieRememberMeManager;
 import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.apache.shiro.web.servlet.SimpleCookie;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +30,13 @@ public class ShiroConfiguration {
         shiroFilterFactoryBean.setSecurityManager(manager);
 
         Map<String, String> filterChainDefinitionMap = new LinkedHashMap<>();
+        //配置记住我或认证通过可以访问的地址
+        filterChainDefinitionMap.put("/", "user");
+        filterChainDefinitionMap.put("/index", "user");
+
+        /** authc：该过滤器下的页面必须验证后才能访问，它是Shiro内置的一个拦截器
+         * org.apache.shiro.web.filter.authc.FormAuthenticationFilter */
+        // anon：它对应的过滤器里面是空的,什么都没做,可以理解为不拦截
         filterChainDefinitionMap.put("/logout", "logout");
         filterChainDefinitionMap.put("/favicon.ico", "anon");
         filterChainDefinitionMap.put("/static/**", "anon");
@@ -47,9 +58,12 @@ public class ShiroConfiguration {
      * @return
      */
     @Bean(name="securityManager")
-    public SecurityManager securityManager(@Qualifier("authRealm") MyShiroRealm authRealm) {
+    public SecurityManager securityManager(@Qualifier("authRealm") MyShiroRealm authRealm,
+                                           @Qualifier("ehCacheManager") EhCacheManager ehCacheManager) {
         DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
         securityManager.setRealm(authRealm);
+        securityManager.setCacheManager(ehCacheManager);//注入缓存对象,防止每访问一个带权限的请求都要shiro去查询数据库的权限
+        securityManager.setRememberMeManager(rememberMeManager()); //注入记住我cookie管理器(记住密码)
         return securityManager;
     }
 
@@ -111,5 +125,43 @@ public class ShiroConfiguration {
     @Bean
     public ShiroDialect shiroDialect() {
         return new ShiroDialect();
+    }
+
+    /**
+     * shiro缓存对象，防止当每次访问带权限的请求时，shiro都去执行权限认证，进行查询权限
+     * 也就是说，只需给shiro一次权限即可（缓存），不需要每次查询权限
+     * @return
+     */
+    @Bean(name="ehCacheManager")
+    public EhCacheManager ehCacheManager() {
+        EhCacheManager ehCacheManager = new EhCacheManager();
+        ehCacheManager.setCacheManagerConfigFile("classpath:config/ehcache-shiro.xml");
+        return ehCacheManager;
+    }
+    /**
+     * cookie对象;
+     * rememberMeCookie()方法是设置Cookie的生成模版，比如cookie的name，cookie的有效时间等等。
+     * @return
+     */
+    @Bean
+    public SimpleCookie rememberMeCookie(){
+        //这个参数是cookie的名称，对应前端的checkbox的name = rememberMe
+        SimpleCookie simpleCookie = new SimpleCookie("rememberMe");
+        //<!-- 记住我cookie生效时间30天 ,单位秒;-->
+        simpleCookie.setMaxAge(259200);
+        return simpleCookie;
+    }
+    /**
+     * cookie管理对象;
+     * rememberMeManager()方法是生成rememberMe管理器，而且要将这个rememberMe管理器设置到securityManager中
+     * @return
+     */
+    @Bean
+    public CookieRememberMeManager rememberMeManager(){
+        CookieRememberMeManager cookieRememberMeManager = new CookieRememberMeManager();
+        cookieRememberMeManager.setCookie(rememberMeCookie());
+        //rememberMe cookie加密的密钥 建议每个项目都不一样 默认AES算法 密钥长度(128 256 512 位)
+        cookieRememberMeManager.setCipherKey(Base64.decode("2AvVhdsgUs0FSA3SDFAdag=="));
+        return cookieRememberMeManager;
     }
 }
